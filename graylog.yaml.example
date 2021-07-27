@@ -1,0 +1,57 @@
+graylog:
+  url: 
+  user: admin # user with admin grants
+  password: 
+users:
+  - username: 
+    password: 
+    email: 
+    first_name: 
+    last_name: 
+inputs:
+  - title: 
+    type: "org.graylog2.inputs.gelf.udp.GELFUDPInput"
+    global: true
+    configuration:
+      bind_address: 0.0.0.0
+      port: 1002
+      decompress_size_limit: 8388608
+      number_worker_threads: 1
+      override_source: null
+      recv_buffer_size: 262144
+    static_fields: 
+      key: 
+      value: 
+    node: null
+streams:
+  - title: 
+    description: 
+    remove_matches_from_default_stream: True
+    matching_type: AND
+    index_set_id: 60fff2b01f48f37072372f3c
+    rules:
+      field: 
+      inverted: False
+      value: 
+indexes:
+  - title: 
+    id: 60fff2b01f48f37072372f3c
+    description: 
+    index_prefix: 
+    shards: 2
+    replicas: 0
+    rotation_strategy_class: org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategy
+    rotation_strategy:
+      type: org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategyConfig
+      rotation_period: P1D
+    retention_strategy_class: org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy
+    retention_strategy:
+      type: org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig
+      max_number_of_indices: 20
+    index_analyzer: standard
+    index_optimization_max_num_segments: 1
+    index_optimization_disabled: False
+    field_type_refresh_interval: 5000
+    index_template_type: null
+    writable: True
+    default: False
