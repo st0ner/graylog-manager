@@ -262,6 +262,11 @@ if args.graylog_config:
             gl_user = data['graylog']['user']
             gl_pass = data['graylog']['password']
             auth=(gl_user, gl_pass)
+
+            if args.create_update_indexes or args.all:
+                logging.info(f'Proccess for creating indexes was started')
+                gl_ex_indexes = getIndexes()
+                indexCreate(gl_ex_indexes)
             
             if args.create_update_inputs or args.all:
                 logging.info(f'Proccess for creating inputs was started')
@@ -278,9 +283,5 @@ if args.graylog_config:
                 logging.info(f'Proccess for creating users was started')
                 userCreate()
             
-            if args.create_update_indexes or args.all:
-                logging.info(f'Proccess for creating indexes was started')
-                gl_ex_indexes = getIndexes()
-                indexCreate(gl_ex_indexes)
     except TypeError:
         logging.info(f'Config {args.graylog_config[0]} is not valid')
