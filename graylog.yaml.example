@@ -1,3 +1,10 @@
+configs:
+  balancer_host: 
+  balancer_port: 
+  workers:
+    - worker1.example.com
+    - worker2.example.com
+    - worker3.example.com
 graylog:
   url: 
   user: admin # user with admin grants
@@ -15,6 +22,7 @@ inputs:
     configuration:
       bind_address: 0.0.0.0
       port: 1002
+      nodeport: 30002
       decompress_size_limit: 8388608
       number_worker_threads: 1
       override_source: null

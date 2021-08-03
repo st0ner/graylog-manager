@@ -4,6 +4,8 @@ import yaml
 from datetime import datetime
 import time
 from yaml.loader import SafeLoader
+from jinja2 import Environment, FileSystemLoader
+from fabric import Connection
 import argparse
 import logging
 import sys
@@ -16,6 +18,7 @@ parser.add_argument('--create_update_inputs', dest='create_update_inputs', help=
 parser.add_argument('--create_update_users', dest='create_update_users', help='for work with users', action="store_true")
 parser.add_argument('--create_update_streams', dest='create_update_streams', help='for work with streams', action="store_true")
 parser.add_argument('--create_update_indexes', dest='create_update_indexes', help='for work with es indexes', action="store_true")
+parser.add_argument('--create_update_balancer', dest='create_update_balancer', help='for using external balancer', action="store_true")
 args = parser.parse_args()
 
 def getInput():
@@ -23,8 +26,8 @@ def getInput():
             f'{gl_url}/api/system/inputs',
             headers=headers,
             auth=auth,
-
     )
+
     response = response.json()
     gl_ex_input = {}
     for gl_input in response['inputs']:
@@ -85,7 +88,7 @@ def restartInput(input_id):
         headers=headers,
         auth=auth,
     )
-    
+
 def setStaticFields(input_id, static_field_key, static_field_value):
     data = {
         'key': static_field_key,
@@ -148,7 +151,7 @@ def getStreams():
         headers=headers,
         auth=auth,
     )
-    
+
     response = response.json()
     gl_ex_streams = []
     for stream in response['streams']:
@@ -181,7 +184,7 @@ def createStreams(gl_ex_streams):
                 auth=auth,
                 json=gl_stream_data
             )
-            
+
             response = response.json()
             stream_id = response['stream_id']
             logging.info(f'Stream was created: {stream_id}')
@@ -247,6 +250,34 @@ def indexCreate(gl_ex_indexes):
             else:
                 logging.info(f'Index {title} already exist')
 
+def renderBalancer():
+    balancer_host = data['configs']['balancer_host']
+    balancer_port = data['configs']['balancer_port']
+    for nodeport in data['inputs']:
+        project_name = nodeport['title']
+        nginx_port = nodeport['configuration']['nodeport']
+        server_balancer = '\n\t'.join([str(f'server {worker}:{nginx_port};') for worker in data['configs']['workers']])
+
+        file_loader = FileSystemLoader('templates')
+        env = Environment(loader=file_loader)
+
+        balancer = env.get_template('balancer_udp.conf')
+        balancer = balancer.render(
+            project_name=project_name,
+            project_port=nginx_port,
+            server_balancer=server_balancer
+        )
+
+        c = Connection(host=balancer_host, user='root', port=balancer_port)
+        c.run(f'echo "{balancer}" > /etc/nginx/graylog/{project_name}.conf')
+        try:
+            c.run('nginx -t')
+            c.run('nginx -s reload')
+            logging.info('create config for nginx')
+        except:
+            logging.warning('nginx has syntax problem')
+        return False
+
 if args.graylog_config:
     logging.info(f'Render config from {args.graylog_config[0]}')
     try:
@@ -267,21 +298,25 @@ if args.graylog_config:
                 logging.info(f'Proccess for creating indexes was started')
                 gl_ex_indexes = getIndexes()
                 indexCreate(gl_ex_indexes)
-            
+
             if args.create_update_inputs or args.all:
                 logging.info(f'Proccess for creating inputs was started')
                 gl_ex_inputs = getInput()
                 createInput(gl_ex_inputs)
                 checkInput(gl_ex_inputs)
-            
+
             if args.create_update_streams or args.all:
                 logging.info(f'Proccess for creating streams was started')
                 gl_ex_streams = getStreams()
                 createStreams(gl_ex_streams)
-            
+
             if args.create_update_users or args.all:
                 logging.info(f'Proccess for creating users was started')
                 userCreate()
-            
+
+            if args.create_update_balancer or args.all:
+                logging.info(f'Proccess for creating config on balancer')
+                renderBalancer()
+
     except TypeError:
         logging.info(f'Config {args.graylog_config[0]} is not valid')
