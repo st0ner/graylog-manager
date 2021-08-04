@@ -1,6 +1,8 @@
-configs:
+global:
   balancer_host: 
   balancer_port: 
+  k8s_config_path:
+  namespace:
   workers:
     - worker1.example.com
     - worker2.example.com

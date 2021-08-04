@@ -6,6 +6,7 @@ import time
 from yaml.loader import SafeLoader
 from jinja2 import Environment, FileSystemLoader
 from fabric import Connection
+from kubernetes import client, config
 import argparse
 import logging
 import sys
@@ -19,6 +20,7 @@ parser.add_argument('--create_update_users', dest='create_update_users', help='f
 parser.add_argument('--create_update_streams', dest='create_update_streams', help='for work with streams', action="store_true")
 parser.add_argument('--create_update_indexes', dest='create_update_indexes', help='for work with es indexes', action="store_true")
 parser.add_argument('--create_update_balancer', dest='create_update_balancer', help='for using external balancer', action="store_true")
+parser.add_argument('--create_update_services', dest='create_update_services', help='for using k8s', action="store_true")
 args = parser.parse_args()
 
 def getInput():
@@ -251,12 +253,12 @@ def indexCreate(gl_ex_indexes):
                 logging.info(f'Index {title} already exist')
 
 def renderBalancer():
-    balancer_host = data['configs']['balancer_host']
-    balancer_port = data['configs']['balancer_port']
+    balancer_host = data['global']['balancer_host']
+    balancer_port = data['global']['balancer_port']
     for nodeport in data['inputs']:
         project_name = nodeport['title']
         nginx_port = nodeport['configuration']['nodeport']
-        server_balancer = '\n\t'.join([str(f'server {worker}:{nginx_port};') for worker in data['configs']['workers']])
+        server_balancer = '\n\t'.join([str(f'server {worker}:{nginx_port};') for worker in data['global']['workers']])
 
         file_loader = FileSystemLoader('templates')
         env = Environment(loader=file_loader)
@@ -277,6 +279,43 @@ def renderBalancer():
         except:
             logging.warning('nginx has syntax problem')
         return False
+
+def renderService():
+    gl_namespace = data['global']['namespace']
+    kube_config = data['global']['k8s_config_path']
+    config.load_kube_config(kube_config)
+
+    for nodeport in data['inputs']:
+        project_name = nodeport['title']
+        nginx_port = nodeport['configuration']['nodeport']
+        port = nodeport['configuration']['port']
+
+        api_instance = client.CoreV1Api()
+        k8s_services = api_instance.list_namespaced_service(watch=False, namespace=gl_namespace)
+
+        for service_name in k8s_services.items:
+            if service_name.metadata.name == project_name:
+                create_serive = False
+                logging.info(f'Service {project_name} is existed, skip')
+            else:
+                create_serive = True
+                logging.info(f'Service {project_name} is not existed')
+            break
+
+        if create_serive:
+            service = client.V1Service()
+            service.api_version = 'v1'
+            service.kind = 'Service'
+            service.metadata = client.V1ObjectMeta(name=project_name)
+
+            spec = client.V1ServiceSpec()
+            spec.type = 'NodePort'
+            spec.selector = {'app.kubernetes.io/instance': 'graylog', 'app.kubernetes.io/name': 'graylog'}
+            spec.ports = [client.V1ServicePort(protocol='UDP', port=port, target_port=port, node_port=nginx_port)]
+            service.spec = spec
+
+            api_instance.create_namespaced_service(namespace=gl_namespace, body=service)
+            logging.info(f'Service {project_name} is created')
 
 if args.graylog_config:
     logging.info(f'Render config from {args.graylog_config[0]}')
@@ -317,6 +356,10 @@ if args.graylog_config:
             if args.create_update_balancer or args.all:
                 logging.info(f'Proccess for creating config on balancer')
                 renderBalancer()
+
+            if args.create_update_services or args.all:
+                logging.info(f'Proccess for creating service on k8s')
+                renderService()
 
     except TypeError:
         logging.info(f'Config {args.graylog_config[0]} is not valid')

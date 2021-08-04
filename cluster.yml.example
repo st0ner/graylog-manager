@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Config
+clusters:
+- name: "remote-cluster"
+    cluster:
+    server: "KUBE_SERVER"
+    api-version: v1
+users:
+- name: "user-gvnrn"
+    user:
+    token: "KUBE_TOKEN"
+contexts:
+- name: "remote-cluster"
+    context:
+    user: "user-gvnrn"
+    cluster: "remote-cluster"
+current-context: "remote-cluster"	
