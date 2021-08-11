@@ -105,47 +105,48 @@ def setStaticFields(input_id, static_field_key, static_field_value):
     logging.info(f'Add static field for {input_id}')
 
 def userCreate():
-    for user in data['users']:
-        username = user['username']
-        gl_user_data = {
-            'username': username,
-            'password': user['password'],
-            'email': user['email'],
-            'first_name': user['first_name'],
-            'last_name': user['last_name'],
-            'roles': ["Reader"],
-            'permissions': [
-                f'users:tokenlist:{username}',
-                f'users:tokencreate:{username}',
-                f'users:passwordchange:{username}',
-                f'users:tokenremove:{username}',
-                f'users:edit:{username}',
-                'metrics:read',
-                'messagecount:read',
-                'journal:read',
-                'messages:analyze',
-                'fieldnames:read',
-                'messages:read',
-                'indexercluster:read',
-                'system:read',
-                'jvmstats:read',
-                'inputs:read',
-                'buffers:read',
-                'clusterconfigentry:read',
-                'decorators:read',
-                'throughput:read'
-            ],
-        }
-        response = requests.post(
-            f'{gl_url}/api/users',
-            headers=headers,
-            auth=auth,
-            json=gl_user_data
-        )
-        if response.status_code != 400:
-            logging.info(f'User {username} was created')
-        else:
-            logging.info(f'User {username} already exist')
+    if data['users']:
+        for user in data['users']:
+            username = user['username']
+            gl_user_data = {
+                'username': username,
+                'password': user['password'],
+                'email': user['email'],
+                'first_name': user['first_name'],
+                'last_name': user['last_name'],
+                'roles': ["Reader"],
+                'permissions': [
+                    f'users:tokenlist:{username}',
+                    f'users:tokencreate:{username}',
+                    f'users:passwordchange:{username}',
+                    f'users:tokenremove:{username}',
+                    f'users:edit:{username}',
+                    'metrics:read',
+                    'messagecount:read',
+                    'journal:read',
+                    'messages:analyze',
+                    'fieldnames:read',
+                    'messages:read',
+                    'indexercluster:read',
+                    'system:read',
+                    'jvmstats:read',
+                    'inputs:read',
+                    'buffers:read',
+                    'clusterconfigentry:read',
+                    'decorators:read',
+                    'throughput:read'
+                ],
+            }
+            response = requests.post(
+                f'{gl_url}/api/users',
+                headers=headers,
+                auth=auth,
+                json=gl_user_data
+            )
+            if response.status_code != 400:
+                logging.info(f'User {username} was created')
+            else:
+                logging.info(f'User {username} already exist')
 
 def getStreams():
     response = requests.get(
