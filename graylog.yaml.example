@@ -1,24 +1,25 @@
 global:
-  balancer_host: 
-  balancer_port: 
-  k8s_config_path:
-  namespace:
+  balancer_host: balancer.example.com
+  balancer_port: 22
+  k8s_config_path: cluster.yml
+  namespace: graylog
+  network_policy: #true or false
   workers:
     - worker1.example.com
     - worker2.example.com
     - worker3.example.com
 graylog:
-  url: 
+  url: https://graylog.example.com
   user: admin # user with admin grants
-  password: 
+  password: pass
 users:
-  - username: 
-    password: 
-    email: 
-    first_name: 
-    last_name: 
+  - username: user
+    password: pass
+    email: user@example.com
+    first_name: user
+    last_name: example
 inputs:
-  - title: 
+  - title: gelf-input-example
     type: "org.graylog2.inputs.gelf.udp.GELFUDPInput"
     global: true
     configuration:
@@ -30,24 +31,24 @@ inputs:
       override_source: null
       recv_buffer_size: 262144
     static_fields: 
-      key: 
-      value: 
+      key: test
+      value: example
     node: null
 streams:
-  - title: 
-    description: 
+  - title: steam-example
+    description: steam-example
     remove_matches_from_default_stream: True
     matching_type: AND
     index_set_id: 60fff2b01f48f37072372f3c
     rules:
-      field: 
+      field: test
       inverted: False
-      value: 
+      value: example
 indexes:
-  - title: 
+  - title: example-index
     id: 60fff2b01f48f37072372f3c
-    description: 
-    index_prefix: 
+    description: example-index
+    index_prefix: example
     shards: 2
     replicas: 0
     rotation_strategy_class: org.graylog2.indexer.rotation.strategies.TimeBasedRotationStrategy

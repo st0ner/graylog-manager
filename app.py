@@ -1,5 +1,6 @@
 import requests
 import json
+import socket
 import yaml
 from datetime import datetime
 import time
@@ -10,6 +11,7 @@ from kubernetes import client, config
 import argparse
 import logging
 import sys
+import os
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 parser = argparse.ArgumentParser(description='Process graylog manage')
@@ -279,7 +281,6 @@ def renderBalancer():
             logging.info('create config for nginx')
         except:
             logging.warning('nginx has syntax problem')
-        return False
 
 def renderService():
     gl_namespace = data['global']['namespace']
@@ -318,49 +319,91 @@ def renderService():
             api_instance.create_namespaced_service(namespace=gl_namespace, body=service)
             logging.info(f'Service {project_name} is created')
 
+def renderNetworkPolicy():
+    status = data['global']['network_policy']
+    if status:
+        logging.info('Creating network policy was enabled')
+        logging.info('Proccessing...')
+
+        gl_namespace = data['global']['namespace']
+        balancer_ip = fromHostGetIp(data['global']['balancer_host'])
+        kube_config = data['global']['k8s_config_path']
+
+        list_ports = []
+        for nodePort in data['inputs']:
+            list_ports.append(nodePort['configuration']['nodeport'])
+
+        list_ports = '\n        '.join([str(f'- port: {nodePort}') for nodePort in list_ports])
+
+        file_loader = FileSystemLoader('templates')
+        env = Environment(loader=file_loader)
+
+        network_policy = env.get_template('network_policy.yaml')
+        network_policy = network_policy.render(
+            policy_name=gl_namespace,
+            gl_namespace=gl_namespace,
+            balancer_ip=f'{balancer_ip}/32',
+            list_ports=list_ports
+        )
+
+        if not os.path.exists('tmp/'):
+            os.mkdir('tmp/')
+            logging.info('Created tmp dir')
+
+        f = open('tmp/network_policy.yaml', 'w')
+        f.write(network_policy)
+        f.close()
+        logging.info('Rendered network policy')
+
+        os.system(f'kubectl --kubeconfig={kube_config} apply -f tmp/network_policy.yaml')
+        logging.info('Network policy was configured')
+    else:
+        logging.info('Creating network policy was disabled')
+
+def fromHostGetIp(hostname):
+    return socket.gethostbyname(hostname)
+
 if args.graylog_config:
     logging.info(f'Render config from {args.graylog_config[0]}')
-    try:
-        with open(args.graylog_config[0]) as f:
-            data = yaml.load(f, Loader=SafeLoader)
 
-            headers = {
-                'X-Requested-By': 'cli',
-                'Content-Type': 'application/json'
-            }
+    with open(args.graylog_config[0]) as f:
+        data = yaml.load(f, Loader=SafeLoader)
 
-            gl_url = data['graylog']['url']
-            gl_user = data['graylog']['user']
-            gl_pass = data['graylog']['password']
-            auth=(gl_user, gl_pass)
+        headers = {
+            'X-Requested-By': 'cli',
+            'Content-Type': 'application/json'
+        }
 
-            if args.create_update_indexes or args.all:
-                logging.info(f'Proccess for creating indexes was started')
-                gl_ex_indexes = getIndexes()
-                indexCreate(gl_ex_indexes)
+        gl_url = data['graylog']['url']
+        gl_user = data['graylog']['user']
+        gl_pass = data['graylog']['password']
+        auth=(gl_user, gl_pass)
 
-            if args.create_update_inputs or args.all:
-                logging.info(f'Proccess for creating inputs was started')
-                gl_ex_inputs = getInput()
-                createInput(gl_ex_inputs)
-                checkInput(gl_ex_inputs)
+        if args.create_update_indexes or args.all:
+            logging.info(f'Proccess for creating indexes was started')
+            gl_ex_indexes = getIndexes()
+            indexCreate(gl_ex_indexes)
 
-            if args.create_update_streams or args.all:
-                logging.info(f'Proccess for creating streams was started')
-                gl_ex_streams = getStreams()
-                createStreams(gl_ex_streams)
+        if args.create_update_inputs or args.all:
+            logging.info(f'Proccess for creating inputs was started')
+            gl_ex_inputs = getInput()
+            createInput(gl_ex_inputs)
+            checkInput(gl_ex_inputs)
 
-            if args.create_update_users or args.all:
-                logging.info(f'Proccess for creating users was started')
-                userCreate()
+        if args.create_update_streams or args.all:
+            logging.info(f'Proccess for creating streams was started')
+            gl_ex_streams = getStreams()
+            createStreams(gl_ex_streams)
 
-            if args.create_update_balancer or args.all:
-                logging.info(f'Proccess for creating config on balancer')
-                renderBalancer()
+        if args.create_update_users or args.all:
+            logging.info(f'Proccess for creating users was started')
+            userCreate()
 
-            if args.create_update_services or args.all:
-                logging.info(f'Proccess for creating service on k8s')
-                renderService()
+        if args.create_update_balancer or args.all:
+            logging.info(f'Proccess for creating config on balancer')
+            renderBalancer()
 
-    except TypeError:
-        logging.info(f'Config {args.graylog_config[0]} is not valid')
+        if args.create_update_services or args.all:
+            logging.info(f'Proccess for creating service on k8s')
+            renderService()
+            renderNetworkPolicy()
