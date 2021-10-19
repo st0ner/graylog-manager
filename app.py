@@ -1,17 +1,10 @@
-import requests
-import json
-import socket
-import yaml
+import requests, json, socket, yaml, time, argparse, logging, sys, os
 from datetime import datetime
-import time
 from yaml.loader import SafeLoader
 from jinja2 import Environment, FileSystemLoader
 from fabric import Connection
 from kubernetes import client, config
-import argparse
-import logging
-import sys
-import os
+from dotenv import load_dotenv
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 parser = argparse.ArgumentParser(description='Process graylog manage')
@@ -25,11 +18,17 @@ parser.add_argument('--create_update_balancer', dest='create_update_balancer', h
 parser.add_argument('--create_update_services', dest='create_update_services', help='for using k8s', action="store_true")
 args = parser.parse_args()
 
+load_dotenv()
+graylog_url = os.getenv('graylog_url')
+graylog_user = os.getenv('graylog_user')
+graylog_password = os.getenv('graylog_password')
+ssh_user = os.getenv('ssh_user')
+
 def getInput():
     response = requests.get(
-            f'{gl_url}/api/system/inputs',
-            headers=headers,
-            auth=auth,
+        f'{graylog_url}/api/system/inputs',
+        headers=headers,
+        auth=auth,
     )
 
     response = response.json()
@@ -58,12 +57,12 @@ def createInput(gl_ex_inputs):
             }
 
             response = requests.post(
-                f'{gl_url}/api/system/inputs',
+                f'{graylog_url}/api/system/inputs',
                 headers=headers,
                 auth=auth,
                 json=gl_input_data
-
             )
+
             response = response.json()
             input_id = response['id']
             logging.info(f'Input {title} was created with id: {input_id}')
@@ -75,7 +74,7 @@ def checkInput(gl_ex_inputs):
     for gl_input in gl_ex_inputs:
         input_id = gl_ex_inputs[gl_input][0]
         response = requests.get(
-                f'{gl_url}/api/system/inputstates/{input_id}',
+                f'{graylog_url}/api/system/inputstates/{input_id}',
                 headers=headers,
                 auth=auth,
             )
@@ -88,7 +87,7 @@ def checkInput(gl_ex_inputs):
 
 def restartInput(input_id):
     response = requests.put(
-        f'{gl_url}/api/system/inputstates/{input_id}',
+        f'{graylog_url}/api/system/inputstates/{input_id}',
         headers=headers,
         auth=auth,
     )
@@ -99,7 +98,7 @@ def setStaticFields(input_id, static_field_key, static_field_value):
         'value': static_field_value
     }
     response = requests.post(
-        f'{gl_url}/api/system/inputs/{input_id}/staticfields',
+        f'{graylog_url}/api/system/inputs/{input_id}/staticfields',
         headers=headers,
         auth=auth,
         json=data
@@ -110,7 +109,7 @@ def userCreate():
     if data['users']:
         for user in data['users']:
             username = user['username']
-            gl_user_data = {
+            graylog_user_data = {
                 'username': username,
                 'password': user['password'],
                 'email': user['email'],
@@ -140,10 +139,10 @@ def userCreate():
                 ],
             }
             response = requests.post(
-                f'{gl_url}/api/users',
+                f'{graylog_url}/api/users',
                 headers=headers,
                 auth=auth,
-                json=gl_user_data
+                json=graylog_user_data
             )
             if response.status_code != 400:
                 logging.info(f'User {username} was created')
@@ -152,7 +151,7 @@ def userCreate():
 
 def getStreams():
     response = requests.get(
-        f'{gl_url}/api/streams',
+        f'{graylog_url}/api/streams',
         headers=headers,
         auth=auth,
     )
@@ -184,7 +183,7 @@ def createStreams(gl_ex_streams):
                 ]
             }
             response = requests.post(
-                f'{gl_url}/api/streams',
+                f'{graylog_url}/api/streams',
                 headers=headers,
                 auth=auth,
                 json=gl_stream_data
@@ -195,7 +194,7 @@ def createStreams(gl_ex_streams):
             logging.info(f'Stream was created: {stream_id}')
 
             response = requests.post(
-                f'{gl_url}/api/streams/{stream_id}/resume',
+                f'{graylog_url}/api/streams/{stream_id}/resume',
                 headers=headers,
                 auth=auth,
             )
@@ -203,7 +202,7 @@ def createStreams(gl_ex_streams):
 
 def getIndexes():
     response = requests.get(
-        f'{gl_url}/api/system/indices/index_sets?skip=0&limit=0&stats=false',
+        f'{graylog_url}/api/system/indices/index_sets?skip=0&limit=0&stats=false',
         headers=headers,
         auth=auth,
     )
@@ -245,7 +244,7 @@ def indexCreate(gl_ex_indexes):
             }
 
             response = requests.post(
-                f'{gl_url}/api/system/indices/index_sets',
+                f'{graylog_url}/api/system/indices/index_sets',
                 headers=headers,
                 auth=auth,
                 json=gl_index_data
@@ -273,11 +272,11 @@ def renderBalancer():
             server_balancer=server_balancer
         )
 
-        c = Connection(host=balancer_host, user='root', port=balancer_port)
-        c.run(f'echo "{balancer}" > /etc/nginx/graylog/{project_name}.conf')
+        c = Connection(host=balancer_host, user=ssh_user, port=balancer_port)
+        c.sudo(f'echo "{balancer}" | sudo tee /etc/nginx/graylog/{project_name}.conf')
         try:
-            c.run('nginx -t')
-            c.run('nginx -s reload')
+            c.sudo('nginx -t')
+            c.sudo('nginx -s reload')
             logging.info('create config for nginx')
         except:
             logging.warning('nginx has syntax problem')
@@ -374,10 +373,7 @@ if args.graylog_config:
             'Content-Type': 'application/json'
         }
 
-        gl_url = data['graylog']['url']
-        gl_user = data['graylog']['user']
-        gl_pass = data['graylog']['password']
-        auth=(gl_user, gl_pass)
+        auth=(graylog_user, graylog_password)
 
         if args.create_update_indexes or args.all:
             logging.info(f'Proccess for creating indexes was started')

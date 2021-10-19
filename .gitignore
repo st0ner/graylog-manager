@@ -5,3 +5,4 @@ cluster.yml
 !cluster.yml.example
 !network_policy.yaml
 tmp
+.env
