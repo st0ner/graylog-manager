@@ -301,6 +301,7 @@ def renderService():
             else:
                 create_serive = True
                 logging.info(f'Service {project_name} is not existed')
+                break
 
         if create_serive:
             service = client.V1Service()
